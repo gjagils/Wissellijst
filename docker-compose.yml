@@ -3,12 +3,17 @@ services:
     image: python:3.12-slim
     working_dir: /app
     volumes:
-      - ./:/app
+      - ./app:/app
     env_file:
       - .env
-    command: ["python", "-c", "print('Wisselijst container is running')"]
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "pip install -r requirements.txt &&
+             uvicorn src.main:app --host 0.0.0.0 --port 8000"
     depends_on:
       - db
+
 
   db:
     image: postgres:16
