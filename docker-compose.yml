@@ -4,6 +4,7 @@ services:
     working_dir: /app
     volumes:
       - ./app:/app
+      - ./.secrets:/app/.secrets
     env_file:
       - .env
     ports:
