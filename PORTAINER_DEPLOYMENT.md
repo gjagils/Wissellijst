@@ -207,9 +207,9 @@ Je kunt de logs bekijken:
 
 ---
 
-## Stap 7: Database Migratie Uitvoeren
+## Stap 7: Database Initialiseren
 
-De database moet geïnitialiseerd worden met Alembic migrations.
+De database moet geïnitialiseerd worden met alle tabellen.
 
 ### Via Portainer Console:
 
@@ -220,14 +220,30 @@ De database moet geïnitialiseerd worden met Alembic migrations.
 5. Voer uit:
 
 ```bash
-# Controleer of Alembic is geïnstalleerd
-alembic --version
+# Initialiseer database (maakt alle tabellen aan)
+python init_db.py
+```
 
-# Voer migratie uit
-alembic upgrade head
+Het script vraagt of je bestaande tabellen wilt verwijderen (voor eerste installatie antwoord gewoon "no"):
+```
+Do you want to drop and recreate all tables? (yes/no): no
+```
 
-# Controleer of het gelukt is
-echo "Database migratie voltooid!"
+Je zou output moeten zien zoals:
+```
+🔗 Connecting to database...
+   URL: postgresql://playlist@***
+🔨 Creating all tables from models...
+✅ Database initialized successfully!
+📊 Created 7 tables:
+   - block_tracks
+   - playlist_blocks
+   - playlist_rules
+   - playlists
+   - run_changes
+   - runs
+   - track_history
+🎉 Ready to use!
 ```
 
 ### Via SSH (alternatief):
@@ -236,18 +252,11 @@ echo "Database migratie voltooid!"
 # SSH naar je NAS
 ssh <gebruiker>@<nas-ip>
 
-# Ga naar de app directory
-docker exec -it wissellijst-app sh
-
-# Voer migratie uit
-alembic upgrade head
+# Voer init script uit in container
+docker exec -it wissellijst-app python init_db.py
 ```
 
-Je zou output moeten zien zoals:
-```
-INFO  [alembic.runtime.migration] Running upgrade  -> ac11471a3939, Add runs and metadata
-INFO  [alembic.runtime.migration] Running upgrade ac11471a3939 -> head
-```
+**Let op:** Dit script maakt ALLE tabellen aan inclusief de nieuwe velden uit Sprint 1-4. Je hoeft daarna geen Alembic migrations meer uit te voeren voor de eerste installatie.
 
 ---
 
@@ -429,8 +438,24 @@ Format: `minuut uur dag maand weekdag`
 docker exec -it wissellijst-db psql -U playlist -d playlistdb
 
 # Binnen psql:
-\dt  # Toon alle tabellen
+\dt  # Toon alle tabellen (zou 7 tabellen moeten tonen)
 \q   # Quit
+```
+
+### Database initialisatie mislukt:
+
+**Error: "relation 'playlists' does not exist"**
+- Dit betekent dat de tabellen nog niet zijn aangemaakt
+- Run `python init_db.py` opnieuw in de app container
+
+**Error: "could not connect to server"**
+- Database container is nog niet klaar
+- Wacht 30 seconden en probeer opnieuw
+
+**Tabellen opnieuw aanmaken:**
+```bash
+docker exec -it wissellijst-app python init_db.py
+# Antwoord "yes" als gevraagd of je tabellen wilt verwijderen
 ```
 
 ### API keys werken niet:
