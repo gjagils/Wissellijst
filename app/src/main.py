@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 
 from src.db.session import SessionLocal
+from src.logging_config import setup_logging
 
 import src.db.models as models
 
@@ -69,8 +71,52 @@ try:
 except Exception:
     BOOTSTRAP_ENABLED = False
 
+# Scheduler service
+try:
+    from src.services.scheduler_service import (
+        start_scheduler,
+        shutdown_scheduler,
+        get_scheduler,
+    )
+    SCHEDULER_ENABLED = True
+except Exception as e:
+    print(f"Scheduler service not available: {e}")
+    SCHEDULER_ENABLED = False
+
 
 app = FastAPI(title="Wissellijst API")
+
+
+# Startup event: Initialize scheduler
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup."""
+    # Setup logging
+    log_level = os.getenv("LOG_LEVEL", "INFO")
+    log_file = os.getenv("LOG_FILE", None)
+    setup_logging(level=log_level, log_file=log_file)
+
+    print(f"✅ Logging configured: level={log_level}")
+
+    # Start scheduler
+    if SCHEDULER_ENABLED:
+        try:
+            start_scheduler()
+            print("✅ Playlist scheduler started")
+        except Exception as e:
+            print(f"⚠️  Failed to start scheduler: {e}")
+
+
+# Shutdown event: Stop scheduler
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown."""
+    if SCHEDULER_ENABLED:
+        try:
+            shutdown_scheduler()
+            print("✅ Playlist scheduler stopped")
+        except Exception as e:
+            print(f"⚠️  Failed to stop scheduler: {e}")
 
 
 def get_db():
@@ -435,3 +481,117 @@ if BOOTSTRAP_ENABLED:
             batch_size=req.batch_size,
             max_rounds=req.max_rounds,
         )
+
+
+# ============================================================
+# Scheduler Endpoints (Sprint 3)
+# ============================================================
+
+if SCHEDULER_ENABLED:
+
+    @app.post("/scheduler/refresh/{playlist_key}")
+    def manual_refresh_trigger(
+        playlist_key: str,
+        auto_commit: bool = False,
+        db: Session = Depends(get_db)
+    ):
+        """
+        Manually trigger a refresh for a playlist.
+
+        This is useful for testing scheduled refreshes without waiting for cron.
+
+        Query params:
+            auto_commit: If True, automatically commit approved changes (default: False)
+        """
+        # Verify playlist exists
+        pl = get_playlist_or_404(db, playlist_key)
+
+        # Trigger refresh
+        scheduler = get_scheduler()
+        result = scheduler.trigger_manual_refresh(playlist_key, auto_commit)
+
+        return result
+
+
+    @app.get("/scheduler/jobs")
+    def get_scheduled_jobs():
+        """Get all scheduled jobs with next run times."""
+        scheduler = get_scheduler()
+        jobs = scheduler.get_scheduled_jobs()
+
+        return {
+            "total": len(jobs),
+            "jobs": jobs,
+        }
+
+
+    @app.post("/scheduler/reload")
+    def reload_scheduler(db: Session = Depends(get_db)):
+        """
+        Reload scheduler from database.
+
+        This re-reads all active playlists and updates their scheduled jobs.
+        Useful after updating playlist schedules.
+        """
+        scheduler = get_scheduler()
+        scheduler.reload_from_database()
+
+        jobs = scheduler.get_scheduled_jobs()
+
+        return {
+            "success": True,
+            "message": f"Scheduler reloaded with {len(jobs)} jobs",
+            "jobs": jobs,
+        }
+
+
+    @app.patch("/playlists/{playlist_key}/schedule")
+    def update_playlist_schedule(
+        playlist_key: str,
+        refresh_schedule: Optional[str] = None,
+        is_auto_commit: Optional[bool] = None,
+        db: Session = Depends(get_db)
+    ):
+        """
+        Update a playlist's refresh schedule.
+
+        Body:
+            refresh_schedule: Cron expression (e.g., "0 2 * * 1" for Monday 2:00 AM)
+                             Set to null to disable scheduling
+            is_auto_commit: If True, automatically commit refreshes (optional)
+        """
+        pl = get_playlist_or_404(db, playlist_key)
+
+        # Update database
+        if refresh_schedule is not None:
+            pl.refresh_schedule = refresh_schedule
+
+        if is_auto_commit is not None:
+            pl.is_auto_commit = is_auto_commit
+
+        db.commit()
+
+        # Update scheduler
+        scheduler = get_scheduler()
+
+        if pl.refresh_schedule:
+            try:
+                scheduler.add_playlist_job(
+                    pl.key,
+                    pl.refresh_schedule,
+                    pl.is_auto_commit
+                )
+                message = f"Schedule updated: {pl.refresh_schedule} (auto_commit={pl.is_auto_commit})"
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+        else:
+            scheduler.remove_playlist_job(pl.key)
+            message = "Scheduling disabled"
+
+        return {
+            "success": True,
+            "message": message,
+            "playlist_key": pl.key,
+            "refresh_schedule": pl.refresh_schedule,
+            "is_auto_commit": pl.is_auto_commit,
+        }
