@@ -3,8 +3,9 @@ from __future__ import annotations
 import os
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from src.db.session import SessionLocal
 from src.logging_config import setup_logging
@@ -86,6 +87,12 @@ except Exception as e:
 
 app = FastAPI(title="Wissellijst API")
 
+# Mount static files (frontend)
+static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    print(f"✅ Static files mounted from: {static_dir}")
+
 
 # Startup event: Initialize scheduler
 @app.on_event("startup")
@@ -152,6 +159,12 @@ def get_or_create_rules(db: Session, playlist: Any):
     db.commit()
     db.refresh(rules)
     return rules
+
+
+@app.get("/")
+def root():
+    """Redirect to frontend dashboard"""
+    return RedirectResponse(url="/static/index.html")
 
 
 @app.get("/health")
