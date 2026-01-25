@@ -2,31 +2,24 @@
 """
 Database initialization script.
 Creates all tables from SQLAlchemy models.
-Run this for fresh installations before using Alembic migrations.
+Run this for fresh installations.
 """
 
-import os
 import sys
 from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import inspect
+from src.db.session import engine
 from src.db.models import Base
-from src.db.session import get_db_url
 
 
 def init_database():
     """Initialize database with all tables."""
 
-    # Get database URL
-    db_url = get_db_url()
-    print(f"🔗 Connecting to database...")
-    print(f"   URL: {db_url.split('@')[0]}@***")  # Hide password
-
-    # Create engine
-    engine = create_engine(db_url, echo=True)
+    print("🔗 Connecting to database...")
 
     # Check if tables already exist
     inspector = inspect(engine)
@@ -67,4 +60,6 @@ if __name__ == "__main__":
         init_database()
     except Exception as e:
         print(f"\n❌ Error initializing database: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
