@@ -15,7 +15,7 @@ def _auth_manager() -> SpotifyOAuth:
             "Spotify credentials not set (SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET)"
         )
 
-    scope = "playlist-read-private user-read-email"
+    scope = "playlist-read-private playlist-modify-public playlist-modify-private user-read-email"
 
     return SpotifyOAuth(
         client_id=client_id,
