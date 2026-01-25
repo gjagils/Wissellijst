@@ -270,16 +270,22 @@ Voor de eerste keer moet je Spotify authenticeren.
 2. Voer uit:
 
 ```bash
-python -c "from src.spotify_auth import ensure_token; ensure_token()"
+python authenticate_spotify.py
 ```
 
-3. Je krijgt een URL te zien. Kopieer deze en open in een browser
+3. Je krijgt een URL te zien. **Kopieer deze** en open in een browser
 4. Log in met Spotify en geef toestemming
 5. Je wordt doorgestuurd naar `http://localhost:8888/callback?code=...`
-6. Kopieer de **hele URL** uit de browser
+6. Kopieer de **hele URL** uit de browser (inclusief `http://localhost:8888/callback?code=...`)
 7. Plak deze in de console en druk op Enter
 
-De token wordt opgeslagen in `secrets/.cache-<username>`
+Je zou moeten zien:
+```
+✅ Succesvol geauthenticeerd met Spotify!
+🎉 Token opgeslagen in /app/.secrets/spotify_cache
+```
+
+De token wordt opgeslagen in `/app/.secrets/spotify_cache`
 
 ---
 
