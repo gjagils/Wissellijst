@@ -192,6 +192,13 @@ def spotify_me():
     return {"id": me.get("id"), "display_name": me.get("display_name"), "email": me.get("email")}
 
 
+@app.get("/spotify/playlists")
+def spotify_playlists():
+    """Get all Spotify playlists of the current user"""
+    sp = SpotifyClient()
+    return sp.get_user_playlists()
+
+
 @app.post("/playlists", response_model=Dict[str, Any])
 def create_playlist(payload: PlaylistCreate, db: Session = Depends(get_db)):
     pl = Playlist(
@@ -222,8 +229,11 @@ def list_playlists(db: Session = Depends(get_db)):
         {
             "id": r.id,
             "key": r.key,
+            "name": r.name,
             "spotify_playlist_id": r.spotify_playlist_id,
             "vibe": getattr(r, "vibe", None),
+            "refresh_schedule": r.refresh_schedule,
+            "is_auto_commit": r.is_auto_commit,
         }
         for r in rows
     ]

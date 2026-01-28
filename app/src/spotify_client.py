@@ -94,3 +94,29 @@ class SpotifyClient:
             "title": track["name"],
             "popularity": track.get("popularity"),
         }
+
+    def get_user_playlists(self) -> List[Dict]:
+        """Get all playlists of the current user"""
+        results: List[Dict] = []
+        offset = 0
+        limit = 50
+
+        while True:
+            page = self.sp.current_user_playlists(offset=offset, limit=limit)
+
+            for item in page.get("items", []):
+                results.append({
+                    "id": item["id"],
+                    "name": item["name"],
+                    "description": item.get("description", ""),
+                    "tracks_total": item.get("tracks", {}).get("total", 0),
+                    "image_url": item["images"][0]["url"] if item.get("images") else None,
+                    "owner": item.get("owner", {}).get("display_name", "Unknown"),
+                })
+
+            if page.get("next"):
+                offset += limit
+            else:
+                break
+
+        return results

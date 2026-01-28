@@ -103,18 +103,25 @@ async function loadPlaylists() {
                 <div class="flex justify-between items-start">
                     <div class="flex-1">
                         <h3 class="text-lg font-medium text-gray-900">${playlist.name || playlist.key}</h3>
-                        <p class="text-sm text-gray-500 mt-1">${playlist.vibe || 'No description'}</p>
-                        <div class="mt-2 flex gap-2">
+                        <p class="text-sm text-gray-500 mt-1">${playlist.vibe || 'Geen beschrijving'}</p>
+                        <p class="text-xs text-gray-400 mt-1">
+                            Schedule: ${playlist.refresh_schedule || 'Handmatig'} |
+                            Auto-commit: ${playlist.is_auto_commit ? 'Ja' : 'Nee'}
+                        </p>
+                        <div class="mt-3 flex flex-wrap gap-2">
                             <button onclick="triggerRefresh('${playlist.key}', false)" class="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
-                                Preview Refresh
+                                Preview Run
                             </button>
                             <button onclick="triggerRefresh('${playlist.key}', true)" class="text-sm bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">
-                                Auto-commit Refresh
+                                Auto-commit Run
+                            </button>
+                            <button onclick="showEditRulesModal('${playlist.key}', '${(playlist.name || playlist.key).replace(/'/g, "\\'")}')" class="text-sm bg-gray-600 text-white px-3 py-1 rounded hover:bg-gray-700">
+                                Regels
                             </button>
                         </div>
                     </div>
                     <div class="text-right">
-                        <span class="text-sm text-gray-500">ID: ${playlist.id}</span>
+                        <span class="text-xs text-gray-400">Key: ${playlist.key}</span>
                     </div>
                 </div>
             </div>
@@ -399,6 +406,195 @@ function getStatusBadge(status) {
         case 'committed': return 'bg-green-100 text-green-800';
         case 'cancelled': return 'bg-red-100 text-red-800';
         default: return 'bg-gray-100 text-gray-800';
+    }
+}
+
+// ============================================================
+// Add Playlist Modal
+// ============================================================
+
+async function showAddPlaylistModal() {
+    document.getElementById('add-playlist-modal').classList.remove('hidden');
+
+    // Load Spotify playlists
+    const select = document.getElementById('spotify-playlist-select');
+    select.innerHTML = '<option value="">Laden...</option>';
+
+    try {
+        const response = await fetch(`${API_BASE}/spotify/playlists`);
+        const playlists = await response.json();
+
+        select.innerHTML = '<option value="">-- Selecteer een Spotify playlist --</option>' +
+            playlists.map(p => `<option value="${p.id}" data-name="${p.name}">${p.name} (${p.tracks_total} tracks)</option>`).join('');
+
+        // Auto-fill name when selecting
+        select.onchange = function() {
+            const option = this.options[this.selectedIndex];
+            if (option.value) {
+                document.getElementById('playlist-name').value = option.dataset.name || '';
+                document.getElementById('playlist-key').value = (option.dataset.name || '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-|-$/g, '');
+            }
+        };
+    } catch (error) {
+        console.error('Error loading Spotify playlists:', error);
+        select.innerHTML = '<option value="">Fout bij laden playlists</option>';
+    }
+}
+
+function hideAddPlaylistModal() {
+    document.getElementById('add-playlist-modal').classList.add('hidden');
+    document.getElementById('add-playlist-form').reset();
+}
+
+async function submitAddPlaylist(event) {
+    event.preventDefault();
+
+    const spotifyPlaylistId = document.getElementById('spotify-playlist-select').value;
+    const name = document.getElementById('playlist-name').value;
+    const key = document.getElementById('playlist-key').value;
+    const vibe = document.getElementById('playlist-vibe').value;
+    const schedule = document.getElementById('playlist-schedule').value || null;
+    const autoCommit = document.getElementById('playlist-autocommit').checked;
+
+    // Rules
+    const blockSize = parseInt(document.getElementById('rule-block-size').value);
+    const blockCount = parseInt(document.getElementById('rule-block-count').value);
+    const maxArtist = parseInt(document.getElementById('rule-max-artist').value);
+    const noRepeat = document.getElementById('rule-no-repeat').checked;
+
+    // Decade distribution
+    const decadeDistribution = {
+        1980: parseInt(document.getElementById('decade-80').value),
+        1990: parseInt(document.getElementById('decade-90').value),
+        2000: parseInt(document.getElementById('decade-00').value),
+        2010: parseInt(document.getElementById('decade-10').value),
+        2020: parseInt(document.getElementById('decade-20').value),
+    };
+
+    try {
+        // Create playlist
+        const playlistResponse = await fetch(`${API_BASE}/playlists`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                key: key,
+                name: name,
+                spotify_playlist_id: spotifyPlaylistId,
+                vibe: vibe,
+                refresh_schedule: schedule,
+                is_auto_commit: autoCommit,
+            }),
+        });
+
+        if (!playlistResponse.ok) {
+            const error = await playlistResponse.json();
+            throw new Error(error.detail || 'Fout bij aanmaken playlist');
+        }
+
+        // Update rules
+        const rulesResponse = await fetch(`${API_BASE}/playlists/${key}/rules`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                block_size: blockSize,
+                block_count: blockCount,
+                max_tracks_per_artist: maxArtist,
+                no_repeat_ever: noRepeat,
+                candidate_policies: {
+                    decade_distribution: decadeDistribution,
+                },
+            }),
+        });
+
+        if (!rulesResponse.ok) {
+            console.warn('Failed to update rules, using defaults');
+        }
+
+        hideAddPlaylistModal();
+        loadPlaylists();
+        alert(`Playlist "${name}" succesvol aangemaakt!`);
+
+    } catch (error) {
+        console.error('Error creating playlist:', error);
+        alert(`Fout: ${error.message}`);
+    }
+}
+
+// ============================================================
+// Edit Rules Modal
+// ============================================================
+
+async function showEditRulesModal(playlistKey, playlistName) {
+    document.getElementById('edit-rules-modal').classList.remove('hidden');
+    document.getElementById('edit-rules-playlist-key').value = playlistKey;
+    document.getElementById('edit-rules-playlist-name').textContent = playlistName;
+
+    try {
+        const response = await fetch(`${API_BASE}/playlists/${playlistKey}/rules`);
+        const rules = await response.json();
+
+        document.getElementById('edit-block-size').value = rules.block_size || 5;
+        document.getElementById('edit-block-count').value = rules.block_count || 10;
+        document.getElementById('edit-max-artist').value = rules.max_tracks_per_artist || 1;
+        document.getElementById('edit-no-repeat').checked = rules.no_repeat_ever !== false;
+
+        const decades = rules.candidate_policies?.decade_distribution || {};
+        document.getElementById('edit-decade-80').value = decades[1980] || 1;
+        document.getElementById('edit-decade-90').value = decades[1990] || 1;
+        document.getElementById('edit-decade-00').value = decades[2000] || 1;
+        document.getElementById('edit-decade-10').value = decades[2010] || 1;
+        document.getElementById('edit-decade-20').value = decades[2020] || 1;
+
+    } catch (error) {
+        console.error('Error loading rules:', error);
+    }
+}
+
+function hideEditRulesModal() {
+    document.getElementById('edit-rules-modal').classList.add('hidden');
+}
+
+async function submitEditRules(event) {
+    event.preventDefault();
+
+    const playlistKey = document.getElementById('edit-rules-playlist-key').value;
+
+    const decadeDistribution = {
+        1980: parseInt(document.getElementById('edit-decade-80').value),
+        1990: parseInt(document.getElementById('edit-decade-90').value),
+        2000: parseInt(document.getElementById('edit-decade-00').value),
+        2010: parseInt(document.getElementById('edit-decade-10').value),
+        2020: parseInt(document.getElementById('edit-decade-20').value),
+    };
+
+    try {
+        const response = await fetch(`${API_BASE}/playlists/${playlistKey}/rules`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                block_size: parseInt(document.getElementById('edit-block-size').value),
+                block_count: parseInt(document.getElementById('edit-block-count').value),
+                max_tracks_per_artist: parseInt(document.getElementById('edit-max-artist').value),
+                no_repeat_ever: document.getElementById('edit-no-repeat').checked,
+                candidate_policies: {
+                    decade_distribution: decadeDistribution,
+                },
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Fout bij opslaan regels');
+        }
+
+        hideEditRulesModal();
+        alert('Regels opgeslagen!');
+
+    } catch (error) {
+        console.error('Error saving rules:', error);
+        alert(`Fout: ${error.message}`);
     }
 }
 
