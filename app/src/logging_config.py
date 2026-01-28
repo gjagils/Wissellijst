@@ -5,6 +5,7 @@ Sets up structured logging for all services.
 """
 
 import logging
+import os
 import sys
 from datetime import datetime
 
@@ -43,6 +44,7 @@ def setup_logging(level: str = "INFO", log_file: str = None):
 
     # File handler (optional)
     if log_file:
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)
