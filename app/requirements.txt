@@ -3,7 +3,10 @@ uvicorn[standard]==0.30.6
 
 SQLAlchemy==2.0.36
 psycopg2-binary==2.9.9
+alembic==1.13.1
 
 spotipy==2.24.0
 
 openai==1.57.0
+
+APScheduler==3.10.4
