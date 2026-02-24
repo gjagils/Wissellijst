@@ -1,0 +1,15 @@
+services:
+  app:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ./app:/app
+      - ./data:/app/data
+      - ./.secrets:/app/.secrets
+    env_file:
+      - .env
+    ports:
+      - "9090:5000"
+    command: >
+      sh -c "pip install -r requirements.txt &&
+             python web.py"

@@ -1,16 +1,24 @@
 services:
   app:
-    image: python:3.12-slim
-    working_dir: /app
-    volumes:
-      - ./app:/app
-      - ./data:/app/data
-      - ./.secrets:/app/.secrets
-    env_file:
-      - .env
+    image: ghcr.io/gjagils/wissellijst:latest
+    container_name: wissellijst
+    restart: unless-stopped
     ports:
       - "9090:5000"
-    command: >
-      sh -c "pip install --no-cache-dir -r requirements.txt &&
-             python web.py"
-    restart: unless-stopped
+    environment:
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI:-http://127.0.0.1:8888/callback}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - MAIL_FROM=${MAIL_FROM:-}
+    volumes:
+      - secrets:/app/.secrets
+      - data:/app/data
+
+volumes:
+  secrets:
+  data:
