@@ -4,7 +4,7 @@ services:
     container_name: wissellijst
     restart: unless-stopped
     ports:
-      - "8200:8000"
+      - "9090:8000"
     environment:
       - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
       - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
